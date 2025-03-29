@@ -15,8 +15,13 @@ except ImportError:
     colab_env = False
 
 
-EXTENSIONS = ["ms-python.python", "ms-toolsai.jupyter", "mechatroner.rainbow-csv", "vscode-icons-team.vscode-icons"]
-CODESERVER_VERSION = "3.10.2"
+EXTENSIONS = [
+    "ms-python.python",
+    "ms-toolsai.jupyter",
+    "mechatroner.rainbow-csv",
+    "vscode-icons-team.vscode-icons",
+]
+CODESERVER_VERSION = "4.16.1"  # Update to a valid version
 
 
 class ColabCode:
@@ -46,11 +51,40 @@ class ColabCode:
 
     @staticmethod
     def _install_code():
-        subprocess.run(["wget", "https://code-server.dev/install.sh"], stdout=subprocess.PIPE)
-        subprocess.run(
-            ["sh", "install.sh", "--version", f"{CODESERVER_VERSION}"],
-            stdout=subprocess.PIPE,
-        )
+        try:
+            # First try to get the latest version if specific version fails
+            try:
+                subprocess.run(
+                    ["wget", "https://code-server.dev/install.sh"],
+                    stdout=subprocess.PIPE,
+                    check=True,
+                )
+                subprocess.run(
+                    ["sh", "install.sh", "--version", f"{CODESERVER_VERSION}"],
+                    stdout=subprocess.PIPE,
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                print(
+                    f"Failed to install specific version {CODESERVER_VERSION}, trying latest version..."
+                )
+                subprocess.run(
+                    ["sh", "install.sh"],
+                    stdout=subprocess.PIPE,
+                    check=True,
+                )
+
+            # Verify installation worked
+            result = subprocess.run(
+                ["which", "code-server"], stdout=subprocess.PIPE, text=True
+            )
+            if not result.stdout.strip():
+                print(
+                    "Warning: code-server installation may have failed. Executable not found."
+                )
+        except subprocess.CalledProcessError as e:
+            print(f"Error installing code-server: {e}")
+            raise
 
     @staticmethod
     def _install_extensions():
@@ -60,10 +94,6 @@ class ColabCode:
     def _start_server(self):
         if self.authtoken:
             ngrok.set_auth_token(self.authtoken)
-        active_tunnels = ngrok.get_tunnels()
-        for tunnel in active_tunnels:
-            public_url = tunnel.public_url
-            ngrok.disconnect(public_url)
         url = ngrok.connect(addr=self.port, bind_tls=True)
         if self._code:
             print(f"Code Server can be accessed on: {url}")
